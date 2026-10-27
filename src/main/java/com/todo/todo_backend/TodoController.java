@@ -1,34 +1,37 @@
 package com.todo.todo_backend;
 
-import org.springframework.web.bind.annotation.*;
-
-import java.io.FileInputStream;
-import java.sql.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.cloud.FirestoreClient;
-import com.todo.todo_backend.model.User;
-import com.google.api.core.ApiFuture;
 import com.google.auth.oauth2.GoogleCredentials;
-import java.io.File;
+import org.springframework.web.bind.annotation.*;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*") // 允许前端跨域调用
+@CrossOrigin(origins = "*")
 public class TodoController {
+
+    // 1. 确保 Firebase 初始化
     private synchronized void ensureFirebaseInitialized() {
-        if (FirebaseApp.getApps().isEmpty()) {
+        synchronized (FirebaseApp.class) {
+            try {
+                FirebaseApp.getInstance();
+                return;
+            } catch (IllegalStateException ignored) {
+                // 默认实例不存在，继续初始化
+            }
+
             try {
                 File file = new File("src/main/resources/serviceAccountKey.json");
                 if (!file.exists()) {
-                    throw new RuntimeException("❌ 找不到密钥文件: " + file.getAbsolutePath());
+                    throw new IllegalStateException("找不到 Firebase 密钥文件: " + file.getAbsolutePath());
                 }
 
                 FileInputStream serviceAccount = new FileInputStream(file);
@@ -37,176 +40,202 @@ public class TodoController {
                         .build();
 
                 FirebaseApp.initializeApp(options);
-                System.out.println("🔥🔥🔥 [Firebase] 云端数据库连接在接口调用时初始化成功！！！");
+                System.out.println("Firebase 默认实例初始化完成");
             } catch (Exception e) {
-                e.printStackTrace();
-                throw new RuntimeException("❌ Firebase 初始化失败: " + e.getMessage());
+                throw new IllegalStateException("Firebase 初始化失败", e);
             }
         }
     }
 
-    private final String DB_URL = "jdbc:sqlite:local_data.db";
-
-    public TodoController() {
-        // 构造函数：项目启动时自动创建本地 SQLite 数据库和任务表
-        try (Connection conn = DriverManager.getConnection(DB_URL)) {
-            Statement stmt = conn.createStatement();
-            String sql = "CREATE TABLE IF NOT EXISTS local_tasks (" +
-                         "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                         "task_name TEXT, " +
-                         "status TEXT)";
-            stmt.execute(sql);
-            System.out.println("📦 [Java 后端] SQLite 本地数据库及任务表初始化成功！");
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // 0. 健康检查接口
-    @GetMapping("/health")
-    public Map<String, Object> healthCheck() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "UP");
-        response.put("message", "Java Spring Boot 后端正常运行中！");
-        return response;
-    }
-
-    // ==================== 1. CREATE (新增任务) ====================
-    @PostMapping("/tasks")
-    public Map<String, Object> addTask(@RequestBody Map<String, String> request) {
-        String taskName = request.get("taskName");
-        String insertSql = "INSERT INTO local_tasks(task_name, status) VALUES(?, ?)";
-        
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
-            pstmt.setString(1, taskName);
-            pstmt.setString(2, "PENDING"); // 默认状态为待办
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "任务 [" + taskName + "] 创建成功！");
-        return response;
-    }
-
-    // ==================== 2. READ (获取所有任务) ====================
+    // ==================== 1. 获取特定用户的任务列表 ====================
     @GetMapping("/tasks")
-    public List<Map<String, Object>> getAllTasks() {
+    public List<Map<String, Object>> getTasks(@RequestParam(defaultValue = "TestUser") String username) {
         List<Map<String, Object>> tasks = new ArrayList<>();
-        String selectSql = "SELECT * FROM local_tasks";
+        try {
+            ensureFirebaseInitialized();
+            Firestore db = FirestoreClient.getFirestore();
+            DocumentReference docRef = db.collection("users").document(username);
+            DocumentSnapshot document = docRef.get().get();
 
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(selectSql)) {
-            
-            while (rs.next()) {
-                Map<String, Object> task = new HashMap<>();
-                task.put("id", rs.getInt("id"));
-                task.put("taskName", rs.getString("task_name"));
-                task.put("status", rs.getString("status"));
-                tasks.add(task);
+            if (document.exists() && document.contains("tasks")) {
+                tasks = (List<Map<String, Object>>) document.get("tasks");
             }
-        } catch (SQLException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
-
-        return tasks; // Spring Boot 会自动把这个 List 转成漂亮的 JSON 数组传给前端
+        return tasks;
     }
 
-    // ==================== 3. UPDATE (更新任务状态，如打勾完成) ====================
-    @PutMapping("/tasks/{id}")
-    public Map<String, Object> updateTaskStatus(@PathVariable int id, @RequestBody Map<String, String> request) {
-        String status = request.get("status"); // 传入 "COMPLETED" 或 "PENDING"
-        String updateSql = "UPDATE local_tasks SET status = ? WHERE id = ?";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(updateSql)) {
-            pstmt.setString(1, status);
-            pstmt.setInt(2, id);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
+    // ==================== 2. 添加任务 ====================
+    @PostMapping("/tasks")
+    public Map<String, Object> addTask(@RequestBody Map<String, Object> request) {
+        String username = (String) request.getOrDefault("username", "TestUser");
+        String taskName = (String) request.get("taskName");
         Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "ID 为 " + id + " 的任务状态已更新为 " + status);
-        return response;
-    }
-
-    // ==================== 4. DELETE (删除任务) ====================
-    @DeleteMapping("/tasks/{id}")
-    public Map<String, Object> deleteTask(@PathVariable int id) {
-        String deleteSql = "DELETE FROM local_tasks WHERE id = ?";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(deleteSql)) {
-            pstmt.setInt(1, id);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "ID 为 " + id + " 的任务已删除！");
-        return response;
-    }
-
-    // ==================== 5. CLOUD (完成任务，云端积分 +10) ====================
-    @PostMapping("/user/complete")
-    public Map<String, Object> completeTaskAndAddPoints(@RequestBody Map<String, String> request) {
-        String username = request.get("username");
-        Map<String, Object> response = new HashMap<>();
-
-        if (username == null || username.trim().isEmpty()) {
-            username = "TestUser";
-        }
 
         try {
-            // 1. 确保 Firebase 已经连上
             ensureFirebaseInitialized();
-
-            // 2. 获取 Firebase Firestore 云端数据库实例
             Firestore db = FirestoreClient.getFirestore();
-            
-            // 3. 指向云端 "users" 集合中以该用户名命名的文档
             DocumentReference docRef = db.collection("users").document(username);
-            
-            // 4. 读取云端现有数据
-            ApiFuture<DocumentSnapshot> future = docRef.get();
-            DocumentSnapshot document = future.get();
 
+            DocumentSnapshot document = docRef.get().get();
+            List<Map<String, Object>> tasks = new ArrayList<>();
             int currentPoints = 0;
+
             if (document.exists()) {
-                Long pointsLong = document.getLong("points");
-                if (pointsLong != null) {
-                    currentPoints = pointsLong.intValue();
+                if (document.contains("tasks")) {
+                    tasks = (List<Map<String, Object>>) document.get("tasks");
+                }
+                if (document.contains("points")) {
+                    currentPoints = document.getLong("points").intValue();
                 }
             }
 
-            // 5. 加分：积分 +10
-            int newPoints = currentPoints + 10;
+            // 生成唯一任务 ID
+            String taskId = UUID.randomUUID().toString();
+            Map<String, Object> newTask = new HashMap<>();
+            newTask.put("id", taskId);
+            newTask.put("taskName", taskName);
+            newTask.put("status", "PENDING");
 
-            // 6. 写入回 Firebase 云端数据库
-            User updatedUser = new User(username, newPoints);
-            docRef.set(updatedUser).get();
+            tasks.add(newTask);
+
+            // 写回云端
+            Map<String, Object> userData = new HashMap<>();
+            userData.put("username", username);
+            userData.put("points", currentPoints);
+            userData.put("tasks", tasks);
+            docRef.set(userData).get();
 
             response.put("success", true);
-            response.put("username", username);
-            response.put("totalPoints", newPoints);
-            response.put("message", "任务完成！云端积分 +10，当前总积分: " + newPoints);
-            System.out.println("🔥 [Firebase] 用户 [" + username + "] 积分更新成功，当前积分: " + newPoints);
-
+            response.put("task", newTask);
         } catch (Exception e) {
             e.printStackTrace();
             response.put("success", false);
-            response.put("error", e.getMessage());
         }
-
         return response;
+    }
+
+    // ==================== 3. 切换任务状态（完成加分 / 撤销扣分） ====================
+    @PutMapping("/tasks/{id}")
+    public Map<String, Object> updateTaskStatus(@PathVariable String id, @RequestBody Map<String, Object> request) {
+        String username = (String) request.getOrDefault("username", "TestUser");
+        String newStatus = (String) request.get("status"); // "COMPLETED" 或 "PENDING"
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            ensureFirebaseInitialized();
+            Firestore db = FirestoreClient.getFirestore();
+            DocumentReference docRef = db.collection("users").document(username);
+
+            DocumentSnapshot document = docRef.get().get();
+            if (!document.exists()) return response;
+
+            List<Map<String, Object>> tasks = (List<Map<String, Object>>) document.get("tasks");
+            int points = document.contains("points") ? document.getLong("points").intValue() : 0;
+
+            if (tasks != null) {
+                for (Map<String, Object> task : tasks) {
+                    if (task.get("id").equals(id)) {
+                        String oldStatus = (String) task.get("status");
+                        task.put("status", newStatus);
+
+                        // 状态从 PENDING 变成 COMPLETED -> 积分 +10
+                        if (!"COMPLETED".equals(oldStatus) && "COMPLETED".equals(newStatus)) {
+                            points += 10;
+                        } 
+                        // 状态从 COMPLETED 变成 PENDING -> 积分 -10（可选项，防止撤销不扣分）
+                        else if ("COMPLETED".equals(oldStatus) && !"COMPLETED".equals(newStatus)) {
+                            points = Math.max(0, points - 10);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            Map<String, Object> userData = new HashMap<>();
+            userData.put("username", username);
+            userData.put("points", points);
+            userData.put("tasks", tasks);
+            docRef.set(userData).get();
+
+            response.put("success", true);
+            response.put("points", points);
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("success", false);
+        }
+        return response;
+    }
+
+    // ==================== 4. 删除任务 ====================
+    @DeleteMapping("/tasks/{id}")
+    public Map<String, Object> deleteTask(@RequestParam String username, @PathVariable String id) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            ensureFirebaseInitialized();
+            Firestore db = FirestoreClient.getFirestore();
+            DocumentReference docRef = db.collection("users").document(username);
+
+            DocumentSnapshot document = docRef.get().get();
+            if (!document.exists()) return response;
+
+            List<Map<String, Object>> tasks = (List<Map<String, Object>>) document.get("tasks");
+            int points = document.contains("points") ? document.getLong("points").intValue() : 0;
+
+            if (tasks != null) {
+                tasks.removeIf(task -> task.get("id").equals(id));
+            }
+
+            Map<String, Object> userData = new HashMap<>();
+            userData.put("username", username);
+            userData.put("points", points);
+            userData.put("tasks", tasks);
+            docRef.set(userData).get();
+
+            response.put("success", true);
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("success", false);
+        }
+        return response;
+    }
+
+    // ==================== 5. 获取全局排行榜 ====================
+    @GetMapping("/leaderboard")
+    public List<Map<String, Object>> getLeaderboard() {
+        List<Map<String, Object>> leaderboard = new ArrayList<>();
+        try {
+            ensureFirebaseInitialized();
+            Firestore db = FirestoreClient.getFirestore();
+            ApiFuture<QuerySnapshot> future = db.collection("users").get();
+            List<QueryDocumentSnapshot> documents = future.get().getDocuments();
+
+            for (QueryDocumentSnapshot doc : documents) {
+                String username = doc.getString("username");
+                Long points = doc.getLong("points");
+                if (username != null) {
+                    Map<String, Object> userEntry = new HashMap<>();
+                    userEntry.put("username", username);
+                    userEntry.put("points", points != null ? points : 0);
+                    leaderboard.add(userEntry);
+                }
+            }
+
+            // 后端算法：积分降序排序
+            leaderboard.sort((u1, u2) -> {
+                Number p1 = (Number) u1.getOrDefault("points", 0);
+                Number p2 = (Number) u2.getOrDefault("points", 0);
+                return Integer.compare(p2.intValue(), p1.intValue());
+            });
+            
+            // 取前 10 名
+            int limit = Math.min(leaderboard.size(), 10);
+            leaderboard = leaderboard.subList(0, limit);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return leaderboard;
     }
 }

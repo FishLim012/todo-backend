@@ -2,72 +2,106 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>我的全栈 To-Do List</title>
+    <title>云端多用户 To-Do List & 排行榜</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f9f9f9; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f9f9f9; display: flex; justify-content: center; gap: 30px; }
+        .container { width: 450px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .leaderboard-container { width: 300px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); height: fit-content; }
         .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        .user-switch-bar { display: flex; gap: 10px; margin-bottom: 20px; padding: 10px; background: #e9ecef; border-radius: 6px; align-items: center; }
         input[type="text"] { flex: 1; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
         button { padding: 10px 15px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; }
         .add-btn { background-color: #28a745; color: white; }
         .add-btn:hover { background-color: #218838; }
+        .switch-btn { background-color: #007bff; color: white; }
+        .switch-btn:hover { background-color: #0056b3; }
         ul { padding-left: 0; }
         li { list-style: none; display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
         .completed { text-decoration: line-through; color: #888; }
         .btn-group { display: flex; gap: 5px; }
         .complete-btn { background-color: #ffc107; color: #333; }
         .delete-btn { background-color: #dc3545; color: white; }
+        .rank-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
+        .rank-num { font-weight: bold; color: #007bff; width: 30px; }
     </style>
 </head>
 <body>
 
+    <!-- 左侧：任务清单区域 -->
     <div class="container">
-        <h2>📝 我的 To-Do List 任务清单</h2>
+        <h2>📝 云端待办清单</h2>
         
-        <!-- 输入框和添加按钮 -->
-        <div class="input-group">
-            <input type="text" id="taskInput" placeholder="输入一个任务，比如：复习 Spring Boot">
-            <button class="add-btn" onclick="addTask()">添加任务</button>
+        <!-- 账号切换栏 -->
+        <div class="user-switch-bar">
+            <span>当前账号: <strong id="currentUsernameDisplay" style="color: #007bff;">TestUser</strong></span>
+            <input type="text" id="usernameInput" placeholder="输入新昵称切换..." style="padding: 6px;">
+            <button class="switch-btn" onclick="switchUser()">切换账号</button>
         </div>
 
-        <!-- 任务列表展示区 -->
-        <ul id="taskList">
-            <!-- 动态加载 -->
-        </ul>
+        <div class="input-group">
+            <input type="text" id="taskInput" placeholder="输入一个任务...">
+            <button class="add-btn" onclick="addTask()">添加任务</button>
+        </div>
+        <ul id="taskList"></ul>
+    </div>
+
+    <!-- 右侧：全局积分排行榜区域 -->
+    <div class="leaderboard-container">
+        <h2>🏆 全局积分排行榜</h2>
+        <div id="leaderboardList">
+            <p style="color: #888; font-size: 14px;">正在加载排行榜...</p>
+        </div>
     </div>
 
     <script>
-        // 1. 获取所有任务 (READ)
+        let currentUser = localStorage.getItem("todo_username") || "TestUser";
+        document.getElementById('currentUsernameDisplay').innerText = currentUser;
+
+        // 切换账号
+        function switchUser() {
+            const input = document.getElementById('usernameInput');
+            const newName = input.value.trim();
+            if (!newName) {
+                alert('请输入有效的昵称！');
+                return;
+            }
+            currentUser = newName;
+            localStorage.setItem("todo_username", currentUser);
+            document.getElementById('currentUsernameDisplay').innerText = currentUser;
+            input.value = '';
+            
+            // 切换后重新加载该用户的云端任务和排行榜
+            loadTasks();
+            loadLeaderboard();
+        }
+
+        // 1. 获取当前用户的云端任务
         async function loadTasks() {
             try {
-                const response = await fetch('http://localhost:8080/api/tasks');
+                const response = await fetch(`http://localhost:8080/api/tasks?username=${encodeURIComponent(currentUser)}`);
                 const tasks = await response.json();
                 
                 const ul = document.getElementById('taskList');
-                ul.innerHTML = ''; // 清空旧列表
+                ul.innerHTML = '';
                 
                 tasks.forEach(task => {
                     const li = document.createElement('li');
                     const isCompleted = task.status === 'COMPLETED';
                     
-                    // 任务名称文字
                     const span = document.createElement('span');
                     span.className = isCompleted ? 'completed' : '';
                     span.innerText = task.taskName;
                     li.appendChild(span);
 
-                    // 按钮组容器
                     const btnGroup = document.createElement('div');
                     btnGroup.className = 'btn-group';
 
-                    // 完成/撤销按钮 (UPDATE)
                     const toggleBtn = document.createElement('button');
                     toggleBtn.className = 'complete-btn';
                     toggleBtn.innerText = isCompleted ? '撤销' : '完成';
                     toggleBtn.onclick = () => toggleTaskStatus(task.id, task.status);
                     btnGroup.appendChild(toggleBtn);
 
-                    // 删除按钮 (DELETE)
                     const deleteBtn = document.createElement('button');
                     deleteBtn.className = 'delete-btn';
                     deleteBtn.innerText = '删除';
@@ -78,11 +112,11 @@
                     ul.appendChild(li);
                 });
             } catch (e) {
-                console.error("无法连接到 Java 后端", e);
+                console.error("无法加载云端任务", e);
             }
         }
 
-        // 2. 添加任务 (CREATE)
+        // 2. 添加云端任务
         async function addTask() {
             const input = document.getElementById('taskInput');
             const taskName = input.value.trim();
@@ -91,53 +125,67 @@
             await fetch('http://localhost:8080/api/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ taskName: taskName })
+                body: JSON.stringify({ username: currentUser, taskName: taskName })
             });
 
             input.value = ''; 
             loadTasks();     
         }
 
-        // 3. 切换任务状态 (UPDATE)
+        // 3. 切换任务状态（同时更新云端任务与积分）
         async function toggleTaskStatus(id, currentStatus) {
             const newStatus = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
             
-            // 1. 先更新本地 SQLite 的任务状态
             await fetch(`http://localhost:8080/api/tasks/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
+                body: JSON.stringify({ username: currentUser, status: newStatus })
             });
 
-            // 2. 【新增】如果任务是从 未完成 -> 变成完成，则向云端 Firebase 发送加分请求！
-            if (newStatus === 'COMPLETED') {
-                try {
-                    const cloudResponse = await fetch('http://localhost:8080/api/user/complete', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: "TestUser" }) // 暂时先用 TestUser 作为用户名
-                    });
-                    const cloudResult = await cloudResponse.json();
-                    console.log("🔥 云端加分响应:", cloudResult);
-                } catch (err) {
-                    console.error("云端加分失败", err);
-                }
-            }
-
             loadTasks();
+            loadLeaderboard(); // 积分变动，刷新排行榜
         }
 
-        // 4. 删除任务 (DELETE)
+        // 4. 删除云端任务
         async function deleteTask(id) {
-            await fetch(`http://localhost:8080/api/tasks/${id}`, {
+            await fetch(`http://localhost:8080/api/tasks/${id}?username=${encodeURIComponent(currentUser)}`, {
                 method: 'DELETE'
             });
-
             loadTasks();
         }
 
-        // 页面刚加载完就拉取任务
+        // 5. 获取全局排行榜
+        async function loadLeaderboard() {
+            try {
+                const response = await fetch('http://localhost:8080/api/leaderboard');
+                const leaderboard = await response.json();
+                
+                const container = document.getElementById('leaderboardList');
+                container.innerHTML = '';
+
+                if (leaderboard.length === 0) {
+                    container.innerHTML = '<p style="color: #888; font-size: 14px;">暂无排行数据</p>';
+                    return;
+                }
+
+                leaderboard.forEach((user, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'rank-item';
+                    div.innerHTML = `
+                        <span class="rank-num">#${index + 1}</span>
+                        <span style="flex: 1; font-weight: 500;">${user.username}</span>
+                        <span style="color: #28a745; font-weight: bold;">${user.points} 分</span>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (e) {
+                console.error("获取排行榜失败", e);
+            }
+        }
+
+        // 初始化加载
         loadTasks();
+        loadLeaderboard();
     </script>
 </body>
 </html>
