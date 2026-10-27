@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>我的 To-Do List</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        input { padding: 8px; width: 250px; }
+        button { padding: 8px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        ul { margin-top: 20px; }
+        li { margin: 8px 0; }
+    </style>
+</head>
+<body>
+
+    <h2>📝 Java 后端 + SQLite 任务清单</h2>
+    
+    <!-- 输入框和按钮 -->
+    <input type="text" id="taskInput" placeholder="输入一个任务，比如：复习数据结构">
+    <button onclick="addTask()">添加任务</button>
+
+    <!-- 任务列表展示区 -->
+    <ul id="taskList">
+        <!-- 动态从后端加载 -->
+    </ul>
+
+    <script>
+        // 1. 网页打开时，自动去 Java 后端把所有任务拉取并展示
+        async function loadTasks() {
+            try {
+                const response = await fetch('http://localhost:8080/api/tasks');
+                const tasks = await response.json();
+                
+                const ul = document.getElementById('taskList');
+                ul.innerHTML = ''; // 清空旧列表
+                
+                tasks.forEach(task => {
+                    const li = document.createElement('li');
+                    li.innerText = `ID: ${task.id} | 任务: ${task.taskName} | 状态: ${task.status}`;
+                    ul.appendChild(li);
+                });
+            } catch (e) {
+                console.error("无法连接到 Java 后端", e);
+            }
+        }
+
+        // 2. 点击按钮时，把输入框的内容通过 POST 发给 Java 后端
+        async function addTask() {
+            const input = document.getElementById('taskInput');
+            const taskName = input.value.trim();
+            if (!taskName) return alert('请输入任务内容！');
+
+            await fetch('http://localhost:8080/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ taskName: taskName })
+            });
+
+            input.value = ''; // 清空输入框
+            loadTasks();     // 重新刷新列表，看数据是不是进 SQLite 了！
+        }
+
+        // 页面刚加载完就执行一次
+        loadTasks();
+    </script>
+</body>
+</html>
