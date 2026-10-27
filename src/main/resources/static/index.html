@@ -2,31 +2,42 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>我的 To-Do List</title>
+    <title>我的全栈 To-Do List</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        input { padding: 8px; width: 250px; }
-        button { padding: 8px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        ul { margin-top: 20px; }
-        li { margin: 8px 0; }
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f9f9f9; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input[type="text"] { flex: 1; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 15px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; }
+        .add-btn { background-color: #28a745; color: white; }
+        .add-btn:hover { background-color: #218838; }
+        ul { padding-left: 0; }
+        li { list-style: none; display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
+        .completed { text-decoration: line-through; color: #888; }
+        .btn-group { display: flex; gap: 5px; }
+        .complete-btn { background-color: #ffc107; color: #333; }
+        .delete-btn { background-color: #dc3545; color: white; }
     </style>
 </head>
 <body>
 
-    <h2>📝 Java 后端 + SQLite 任务清单</h2>
-    
-    <!-- 输入框和按钮 -->
-    <input type="text" id="taskInput" placeholder="输入一个任务，比如：复习数据结构">
-    <button onclick="addTask()">添加任务</button>
+    <div class="container">
+        <h2>📝 我的 To-Do List 任务清单</h2>
+        
+        <!-- 输入框和添加按钮 -->
+        <div class="input-group">
+            <input type="text" id="taskInput" placeholder="输入一个任务，比如：复习 Spring Boot">
+            <button class="add-btn" onclick="addTask()">添加任务</button>
+        </div>
 
-    <!-- 任务列表展示区 -->
-    <ul id="taskList">
-        <!-- 动态从后端加载 -->
-    </ul>
+        <!-- 任务列表展示区 -->
+        <ul id="taskList">
+            <!-- 动态加载 -->
+        </ul>
+    </div>
 
     <script>
-        // 1. 网页打开时，自动去 Java 后端把所有任务拉取并展示
+        // 1. 获取所有任务 (READ)
         async function loadTasks() {
             try {
                 const response = await fetch('http://localhost:8080/api/tasks');
@@ -37,7 +48,33 @@
                 
                 tasks.forEach(task => {
                     const li = document.createElement('li');
-                    li.innerText = `ID: ${task.id} | 任务: ${task.taskName} | 状态: ${task.status}`;
+                    const isCompleted = task.status === 'COMPLETED';
+                    
+                    // 任务名称文字
+                    const span = document.createElement('span');
+                    span.className = isCompleted ? 'completed' : '';
+                    span.innerText = task.taskName;
+                    li.appendChild(span);
+
+                    // 按钮组容器
+                    const btnGroup = document.createElement('div');
+                    btnGroup.className = 'btn-group';
+
+                    // 完成/撤销按钮 (UPDATE)
+                    const toggleBtn = document.createElement('button');
+                    toggleBtn.className = 'complete-btn';
+                    toggleBtn.innerText = isCompleted ? '撤销' : '完成';
+                    toggleBtn.onclick = () => toggleTaskStatus(task.id, task.status);
+                    btnGroup.appendChild(toggleBtn);
+
+                    // 删除按钮 (DELETE)
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'delete-btn';
+                    deleteBtn.innerText = '删除';
+                    deleteBtn.onclick = () => deleteTask(task.id);
+                    btnGroup.appendChild(deleteBtn);
+
+                    li.appendChild(btnGroup);
                     ul.appendChild(li);
                 });
             } catch (e) {
@@ -45,7 +82,7 @@
             }
         }
 
-        // 2. 点击按钮时，把输入框的内容通过 POST 发给 Java 后端
+        // 2. 添加任务 (CREATE)
         async function addTask() {
             const input = document.getElementById('taskInput');
             const taskName = input.value.trim();
@@ -57,11 +94,49 @@
                 body: JSON.stringify({ taskName: taskName })
             });
 
-            input.value = ''; // 清空输入框
-            loadTasks();     // 重新刷新列表，看数据是不是进 SQLite 了！
+            input.value = ''; 
+            loadTasks();     
         }
 
-        // 页面刚加载完就执行一次
+        // 3. 切换任务状态 (UPDATE)
+        async function toggleTaskStatus(id, currentStatus) {
+            const newStatus = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
+            
+            // 1. 先更新本地 SQLite 的任务状态
+            await fetch(`http://localhost:8080/api/tasks/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            // 2. 【新增】如果任务是从 未完成 -> 变成完成，则向云端 Firebase 发送加分请求！
+            if (newStatus === 'COMPLETED') {
+                try {
+                    const cloudResponse = await fetch('http://localhost:8080/api/user/complete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: "TestUser" }) // 暂时先用 TestUser 作为用户名
+                    });
+                    const cloudResult = await cloudResponse.json();
+                    console.log("🔥 云端加分响应:", cloudResult);
+                } catch (err) {
+                    console.error("云端加分失败", err);
+                }
+            }
+
+            loadTasks();
+        }
+
+        // 4. 删除任务 (DELETE)
+        async function deleteTask(id) {
+            await fetch(`http://localhost:8080/api/tasks/${id}`, {
+                method: 'DELETE'
+            });
+
+            loadTasks();
+        }
+
+        // 页面刚加载完就拉取任务
         loadTasks();
     </script>
 </body>

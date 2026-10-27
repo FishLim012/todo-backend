@@ -1,16 +1,49 @@
 package com.todo.todo_backend;
 
 import org.springframework.web.bind.annotation.*;
+
+import java.io.FileInputStream;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.google.cloud.firestore.*;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.FirebaseOptions;
+import com.google.firebase.cloud.FirestoreClient;
+import com.todo.todo_backend.model.User;
+import com.google.api.core.ApiFuture;
+import com.google.auth.oauth2.GoogleCredentials;
+import java.io.File;
+
+import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping("/api")
 @CrossOrigin(origins = "*") // 允许前端跨域调用
 public class TodoController {
+    private synchronized void ensureFirebaseInitialized() {
+        if (FirebaseApp.getApps().isEmpty()) {
+            try {
+                File file = new File("src/main/resources/serviceAccountKey.json");
+                if (!file.exists()) {
+                    throw new RuntimeException("❌ 找不到密钥文件: " + file.getAbsolutePath());
+                }
+
+                FileInputStream serviceAccount = new FileInputStream(file);
+                FirebaseOptions options = FirebaseOptions.builder()
+                        .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                        .build();
+
+                FirebaseApp.initializeApp(options);
+                System.out.println("🔥🔥🔥 [Firebase] 云端数据库连接在接口调用时初始化成功！！！");
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new RuntimeException("❌ Firebase 初始化失败: " + e.getMessage());
+            }
+        }
+    }
 
     private final String DB_URL = "jdbc:sqlite:local_data.db";
 
@@ -120,6 +153,60 @@ public class TodoController {
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", "ID 为 " + id + " 的任务已删除！");
+        return response;
+    }
+
+    // ==================== 5. CLOUD (完成任务，云端积分 +10) ====================
+    @PostMapping("/user/complete")
+    public Map<String, Object> completeTaskAndAddPoints(@RequestBody Map<String, String> request) {
+        String username = request.get("username");
+        Map<String, Object> response = new HashMap<>();
+
+        if (username == null || username.trim().isEmpty()) {
+            username = "TestUser";
+        }
+
+        try {
+            // 1. 确保 Firebase 已经连上
+            ensureFirebaseInitialized();
+
+            // 2. 获取 Firebase Firestore 云端数据库实例
+            Firestore db = FirestoreClient.getFirestore();
+            
+            // 3. 指向云端 "users" 集合中以该用户名命名的文档
+            DocumentReference docRef = db.collection("users").document(username);
+            
+            // 4. 读取云端现有数据
+            ApiFuture<DocumentSnapshot> future = docRef.get();
+            DocumentSnapshot document = future.get();
+
+            int currentPoints = 0;
+            if (document.exists()) {
+                Long pointsLong = document.getLong("points");
+                if (pointsLong != null) {
+                    currentPoints = pointsLong.intValue();
+                }
+            }
+
+            // 5. 加分：积分 +10
+            int newPoints = currentPoints + 10;
+
+            // 6. 写入回 Firebase 云端数据库
+            User updatedUser = new User(username, newPoints);
+            docRef.set(updatedUser).get();
+
+            response.put("success", true);
+            response.put("username", username);
+            response.put("totalPoints", newPoints);
+            response.put("message", "任务完成！云端积分 +10，当前总积分: " + newPoints);
+            System.out.println("🔥 [Firebase] 用户 [" + username + "] 积分更新成功，当前积分: " + newPoints);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+        }
+
         return response;
     }
 }
