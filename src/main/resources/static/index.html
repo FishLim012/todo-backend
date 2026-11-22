@@ -2,168 +2,509 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>云端多用户 To-Do List & 排行榜</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f9f9f9; display: flex; justify-content: center; gap: 30px; }
-        .container { width: 450px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .leaderboard-container { width: 300px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); height: fit-content; }
-        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
-        .user-switch-bar { display: flex; gap: 10px; margin-bottom: 20px; padding: 10px; background: #e9ecef; border-radius: 6px; align-items: center; }
-        input[type="text"] { flex: 1; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 15px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; }
-        .add-btn { background-color: #28a745; color: white; }
-        .add-btn:hover { background-color: #218838; }
-        .switch-btn { background-color: #007bff; color: white; }
-        .switch-btn:hover { background-color: #0056b3; }
-        ul { padding-left: 0; }
-        li { list-style: none; display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid #eee; }
-        .completed { text-decoration: line-through; color: #888; }
-        .btn-group { display: flex; gap: 5px; }
-        .complete-btn { background-color: #ffc107; color: #333; }
-        .delete-btn { background-color: #dc3545; color: white; }
-        .rank-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
-        .rank-num { font-weight: bold; color: #007bff; width: 30px; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background-color: #f4f6f9;
+            color: #222;
+        }
+
+        /* 左上角账号栏 */
+        .top-bar {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #ffffff;
+            padding: 10px 14px;
+            border-radius: 10px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+            border: 1px solid #eceff4;
+        }
+        .user-badge {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1d4ed8;
+        }
+        .auth-open-btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: #2563eb;
+            color: #fff;
+        }
+        .auth-open-btn:hover { background-color: #1d4ed8; }
+        .logout-btn {
+            padding: 6px 10px;
+            font-size: 13px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: #fff;
+            color: #374151;
+        }
+        .logout-btn:hover { background-color: #f3f4f6; }
+
+        /* 主体布局 */
+        .main-layout {
+            margin-top: 64px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 28px;
+        }
+        .container {
+            width: 560px;
+            max-width: 100%;
+            background: #fff;
+            padding: 22px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+        }
+        .leaderboard-container {
+            width: 310px;
+            max-width: 100%;
+            background: #fff;
+            padding: 22px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            height: fit-content;
+        }
+        h2 { margin-top: 0; font-size: 19px; }
+
+        .input-group { display: flex; gap: 10px; margin-bottom: 18px; }
+        input[type="text"], input[type="password"] {
+            flex: 1;
+            padding: 10px 12px;
+            font-size: 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+        }
+        button {
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .add-btn {
+            padding: 10px 16px;
+            font-size: 14px;
+            border-radius: 8px;
+            background-color: #16a34a;
+            color: #fff;
+            font-weight: 500;
+        }
+        .add-btn:hover { background-color: #15803d; }
+
+        ul { padding-left: 0; margin: 0; }
+        li {
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 4px;
+            border-bottom: 1px solid #f0f0f0;
+            gap: 10px;
+        }
+        .task-text {
+            flex: 1;
+            min-width: 0;
+            word-break: break-word;
+            font-size: 15px;
+        }
+        .completed {
+            text-decoration: line-through;
+            color: #9ca3af;
+        }
+
+        /* 每个任务右侧：各自独立的5个小圈 + 撤销/删除图标 */
+        .row-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        .dots-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .circle-dot {
+            width: 16px;
+            height: 16px;
+            padding: 0;
+            border-radius: 50%;
+            background-color: #ffffff;
+            border: 2px solid #cbd5e1;
+            transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+        }
+        .circle-dot:hover { transform: scale(1.12); }
+        .circle-dot.green {
+            background-color: #16a34a;
+            border-color: #16a34a;
+        }
+
+        .btn-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.12s ease;
+        }
+        .icon-btn:hover { transform: scale(1.06); }
+        .icon-btn:active { transform: scale(0.95); }
+
+        .undo-btn {
+            background-color: #fbbf24;
+            color: #111827;
+        }
+        .undo-btn.is-pending {
+            background-color: #e5e7eb;
+            color: #4b5563;
+        }
+        .del-btn {
+            background-color: #ef4444;
+            color: #fff;
+        }
+
+        .rank-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 9px 0;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 14px;
+        }
+        .rank-num { font-weight: 700; color: #2563eb; width: 32px; }
+
+        /* 登录 / 注册弹窗 */
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .modal-backdrop.show { display: flex; }
+        .modal-card {
+            width: 360px;
+            max-width: 100%;
+            background: #fff;
+            padding: 22px;
+            border-radius: 12px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        }
+        .tab-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab-btn {
+            flex: 1;
+            padding: 8px;
+            border-radius: 6px;
+            background: #f3f4f6;
+            color: #374151;
+            font-weight: 600;
+        }
+        .tab-btn.active { background: #2563eb; color: #fff; }
+        .field { margin-bottom: 12px; }
+        .field label { display: block; font-size: 13px; margin-bottom: 5px; color: #374151; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+        .submit-auth-btn { padding: 9px 14px; border-radius: 6px; background: #2563eb; color: #fff; }
+        .cancel-btn { padding: 9px 14px; border-radius: 6px; background: #e5e7eb; color: #1f2937; }
+        .auth-msg { font-size: 13px; margin-top: 8px; min-height: 18px; color: #dc2626; }
     </style>
 </head>
 <body>
 
-    <!-- 左侧：任务清单区域 -->
-    <div class="container">
-        <h2>📝 云端待办清单</h2>
-        
-        <!-- 账号切换栏 -->
-        <div class="user-switch-bar">
-            <span>当前账号: <strong id="currentUsernameDisplay" style="color: #007bff;">TestUser</strong></span>
-            <input type="text" id="usernameInput" placeholder="输入新昵称切换..." style="padding: 6px;">
-            <button class="switch-btn" onclick="switchUser()">切换账号</button>
-        </div>
-
-        <div class="input-group">
-            <input type="text" id="taskInput" placeholder="输入一个任务...">
-            <button class="add-btn" onclick="addTask()">添加任务</button>
-        </div>
-        <ul id="taskList"></ul>
+    <!-- 左上角账号栏 -->
+    <div class="top-bar">
+        <span>账号：</span>
+        <span class="user-badge" id="currentUsernameDisplay">未登录</span>
+        <button class="auth-open-btn" onclick="openAuthModal('login')">登录 / 注册</button>
+        <button class="logout-btn" id="logoutBtn" onclick="logoutUser()" style="display:none;">退出</button>
     </div>
 
-    <!-- 右侧：全局积分排行榜区域 -->
-    <div class="leaderboard-container">
-        <h2>🏆 全局积分排行榜</h2>
-        <div id="leaderboardList">
-            <p style="color: #888; font-size: 14px;">正在加载排行榜...</p>
+    <div class="main-layout">
+        <!-- 左侧：任务清单 -->
+        <div class="container">
+            <h2>📝 云端待办清单</h2>
+            <div class="input-group">
+                <input type="text" id="taskInput" placeholder="输入一个任务...">
+                <button class="add-btn" onclick="addTask()">添加任务</button>
+            </div>
+            <ul id="taskList"></ul>
+        </div>
+
+        <!-- 右侧：全局积分排行榜 -->
+        <div class="leaderboard-container">
+            <h2>🏆 全局积分排行榜</h2>
+            <div id="leaderboardList">
+                <p style="color: #888; font-size: 14px;">正在加载排行榜...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录 / 注册弹窗 -->
+    <div class="modal-backdrop" id="authModal">
+        <div class="modal-card">
+            <div class="tab-row">
+                <button class="tab-btn active" id="tabLogin" onclick="switchAuthTab('login')">登录</button>
+                <button class="tab-btn" id="tabRegister" onclick="switchAuthTab('register')">注册</button>
+            </div>
+            <div class="field">
+                <label for="authUsername">用户名</label>
+                <input type="text" id="authUsername" placeholder="输入用户名">
+            </div>
+            <div class="field">
+                <label for="authPassword">密码</label>
+                <input type="password" id="authPassword" placeholder="输入密码">
+            </div>
+            <div class="auth-msg" id="authMsg"></div>
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="closeAuthModal()">取消</button>
+                <button class="submit-auth-btn" id="submitAuthBtn" onclick="submitAuth()">登录</button>
+            </div>
         </div>
     </div>
 
     <script>
-        let currentUser = localStorage.getItem("todo_username") || "TestUser";
-        document.getElementById('currentUsernameDisplay').innerText = currentUser;
+        const API_BASE = `${window.location.origin}/api`;
+        let authMode = 'login';
+        let currentUser = localStorage.getItem('todo_logged_user') || '';
 
-        // 切换账号
-        function switchUser() {
-            const input = document.getElementById('usernameInput');
-            const newName = input.value.trim();
-            if (!newName) {
-                alert('请输入有效的昵称！');
-                return;
+        const UNDO_ICON_SVG = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 14 4 9 9 4"></polyline>
+                <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+            </svg>
+        `;
+
+        const DELETE_ICON_SVG = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        `;
+
+        function renderUserState() {
+            const display = document.getElementById('currentUsernameDisplay');
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (currentUser) {
+                display.innerText = currentUser;
+                logoutBtn.style.display = 'inline-block';
+            } else {
+                display.innerText = '游客 (TestUser)';
+                logoutBtn.style.display = 'none';
             }
-            currentUser = newName;
-            localStorage.setItem("todo_username", currentUser);
-            document.getElementById('currentUsernameDisplay').innerText = currentUser;
-            input.value = '';
-            
-            // 切换后重新加载该用户的云端任务和排行榜
-            loadTasks();
-            loadLeaderboard();
         }
 
-        // 1. 获取当前用户的云端任务
+        function activeUsername() {
+            return currentUser || 'TestUser';
+        }
+
+        function openAuthModal(mode = 'login') {
+            document.getElementById('authMsg').innerText = '';
+            document.getElementById('authPassword').value = '';
+            switchAuthTab(mode);
+            document.getElementById('authModal').classList.add('show');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('authModal').classList.remove('show');
+        }
+
+        function switchAuthTab(mode) {
+            authMode = mode;
+            document.getElementById('tabLogin').classList.toggle('active', mode === 'login');
+            document.getElementById('tabRegister').classList.toggle('active', mode === 'register');
+            document.getElementById('submitAuthBtn').innerText = mode === 'login' ? '登录' : '注册并登录';
+            document.getElementById('authMsg').innerText = '';
+        }
+
+        async function submitAuth() {
+            const username = document.getElementById('authUsername').value.trim();
+            const password = document.getElementById('authPassword').value;
+            const msgEl = document.getElementById('authMsg');
+
+            if (!username || !password) {
+                msgEl.innerText = '请填写用户名和密码';
+                return;
+            }
+
+            const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
+            try {
+                const res = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
+                if (!data.success) {
+                    msgEl.innerText = data.message || '操作失败';
+                    return;
+                }
+
+                currentUser = data.username;
+                localStorage.setItem('todo_logged_user', currentUser);
+                renderUserState();
+                closeAuthModal();
+                refreshAll();
+            } catch (err) {
+                msgEl.innerText = '网络请求失败，请检查后端服务';
+            }
+        }
+
+        function logoutUser() {
+            currentUser = '';
+            localStorage.removeItem('todo_logged_user');
+            renderUserState();
+            refreshAll();
+        }
+
         async function loadTasks() {
             try {
-                const response = await fetch(`http://localhost:8080/api/tasks?username=${encodeURIComponent(currentUser)}`);
+                const response = await fetch(`${API_BASE}/tasks?username=${encodeURIComponent(activeUsername())}`);
                 const tasks = await response.json();
-                
+
                 const ul = document.getElementById('taskList');
                 ul.innerHTML = '';
-                
-                tasks.forEach(task => {
+
+                (tasks || []).forEach(task => {
                     const li = document.createElement('li');
                     const isCompleted = task.status === 'COMPLETED';
-                    
+                    const taskDots = (Number(task.dots) || 0) % 5;
+
                     const span = document.createElement('span');
-                    span.className = isCompleted ? 'completed' : '';
+                    span.className = `task-text ${isCompleted ? 'completed' : ''}`;
                     span.innerText = task.taskName;
                     li.appendChild(span);
 
+                    const rowRight = document.createElement('div');
+                    rowRight.className = 'row-right';
+
+                    // 当前任务各自独立的 5 颗小圈
+                    const dotsGroup = document.createElement('div');
+                    dotsGroup.className = 'dots-group';
+                    for (let i = 0; i < 5; i++) {
+                        const dot = document.createElement('button');
+                        dot.type = 'button';
+                        dot.className = `circle-dot ${i < taskDots ? 'green' : ''}`;
+                        dot.title = '点一下变绿并加分，满5次变回白色';
+                        dot.onclick = () => clickTaskCircle(task.id);
+                        dotsGroup.appendChild(dot);
+                    }
+                    rowRight.appendChild(dotsGroup);
+
+                    // 右侧图标按钮：撤销/完成 + 删除
                     const btnGroup = document.createElement('div');
                     btnGroup.className = 'btn-group';
 
                     const toggleBtn = document.createElement('button');
-                    toggleBtn.className = 'complete-btn';
-                    toggleBtn.innerText = isCompleted ? '撤销' : '完成';
+                    toggleBtn.type = 'button';
+                    toggleBtn.className = `icon-btn undo-btn ${isCompleted ? '' : 'is-pending'}`;
+                    toggleBtn.title = isCompleted ? '撤销' : '完成';
+                    toggleBtn.innerHTML = UNDO_ICON_SVG;
                     toggleBtn.onclick = () => toggleTaskStatus(task.id, task.status);
                     btnGroup.appendChild(toggleBtn);
 
                     const deleteBtn = document.createElement('button');
-                    deleteBtn.className = 'delete-btn';
-                    deleteBtn.innerText = '删除';
+                    deleteBtn.type = 'button';
+                    deleteBtn.className = 'icon-btn del-btn';
+                    deleteBtn.title = '删除';
+                    deleteBtn.innerHTML = DELETE_ICON_SVG;
                     deleteBtn.onclick = () => deleteTask(task.id);
                     btnGroup.appendChild(deleteBtn);
 
-                    li.appendChild(btnGroup);
+                    rowRight.appendChild(btnGroup);
+                    li.appendChild(rowRight);
                     ul.appendChild(li);
                 });
             } catch (e) {
-                console.error("无法加载云端任务", e);
+                console.error('无法加载云端任务', e);
             }
         }
 
-        // 2. 添加云端任务
         async function addTask() {
             const input = document.getElementById('taskInput');
             const taskName = input.value.trim();
             if (!taskName) return alert('请输入任务内容！');
 
-            await fetch('http://localhost:8080/api/tasks', {
+            await fetch(`${API_BASE}/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: currentUser, taskName: taskName })
+                body: JSON.stringify({ username: activeUsername(), taskName })
             });
 
-            input.value = ''; 
-            loadTasks();     
+            input.value = '';
+            loadTasks();
         }
 
-        // 3. 切换任务状态（同时更新云端任务与积分）
-        async function toggleTaskStatus(id, currentStatus) {
-            const newStatus = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
-            
-            await fetch(`http://localhost:8080/api/tasks/${id}`, {
+        // 点击某条任务旁边的小圈：只影响该任务自己的5个圈，每次都正常加分
+        async function clickTaskCircle(id) {
+            await fetch(`${API_BASE}/tasks/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: currentUser, status: newStatus })
+                body: JSON.stringify({
+                    username: activeUsername(),
+                    action: 'CIRCLE'
+                })
             });
 
             loadTasks();
-            loadLeaderboard(); // 积分变动，刷新排行榜
+            loadLeaderboard();
         }
 
-        // 4. 删除云端任务
+        async function toggleTaskStatus(id, currentStatus) {
+            const newStatus = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
+
+            await fetch(`${API_BASE}/tasks/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: activeUsername(),
+                    action: 'TOGGLE',
+                    status: newStatus
+                })
+            });
+
+            loadTasks();
+            loadLeaderboard();
+        }
+
         async function deleteTask(id) {
-            await fetch(`http://localhost:8080/api/tasks/${id}?username=${encodeURIComponent(currentUser)}`, {
+            await fetch(`${API_BASE}/tasks/${id}?username=${encodeURIComponent(activeUsername())}`, {
                 method: 'DELETE'
             });
             loadTasks();
         }
 
-        // 5. 获取全局排行榜
         async function loadLeaderboard() {
             try {
-                const response = await fetch('http://localhost:8080/api/leaderboard');
+                const response = await fetch(`${API_BASE}/leaderboard`);
                 const leaderboard = await response.json();
-                
+
                 const container = document.getElementById('leaderboardList');
                 container.innerHTML = '';
 
-                if (leaderboard.length === 0) {
+                if (!leaderboard || leaderboard.length === 0) {
                     container.innerHTML = '<p style="color: #888; font-size: 14px;">暂无排行数据</p>';
                     return;
                 }
@@ -174,18 +515,22 @@
                     div.innerHTML = `
                         <span class="rank-num">#${index + 1}</span>
                         <span style="flex: 1; font-weight: 500;">${user.username}</span>
-                        <span style="color: #28a745; font-weight: bold;">${user.points} 分</span>
+                        <span style="color: #16a34a; font-weight: bold;">${user.points} 分</span>
                     `;
                     container.appendChild(div);
                 });
             } catch (e) {
-                console.error("获取排行榜失败", e);
+                console.error('获取排行榜失败', e);
             }
         }
 
-        // 初始化加载
-        loadTasks();
-        loadLeaderboard();
+        function refreshAll() {
+            loadTasks();
+            loadLeaderboard();
+        }
+
+        renderUserState();
+        refreshAll();
     </script>
 </body>
 </html>
