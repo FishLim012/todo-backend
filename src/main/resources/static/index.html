@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>云端多用户 To-Do List & 排行榜</title>
+    <title>To-Do List & Leaderboard</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -64,7 +64,7 @@
             gap: 28px;
         }
         .container {
-            width: 560px;
+            width: 600px;
             max-width: 100%;
             background: #fff;
             padding: 22px;
@@ -80,7 +80,30 @@
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
             height: fit-content;
         }
-        h2 { margin-top: 0; font-size: 19px; }
+
+        /* 顶部双格子切换栏 */
+        .header-tabs {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .mode-tab {
+            padding: 8px 16px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            background-color: #f9fafb;
+            color: #4b5563;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .mode-tab.active {
+            background-color: #eff6ff;
+            border-color: #2563eb;
+            color: #1d4ed8;
+        }
 
         .input-group { display: flex; gap: 10px; margin-bottom: 18px; }
         input[type="text"], input[type="password"] {
@@ -121,33 +144,33 @@
             word-break: break-word;
             font-size: 15px;
         }
-        .completed {
+        .completed-text {
             text-decoration: line-through;
             color: #9ca3af;
         }
 
-        /* 每个任务右侧：各自独立的5个小圈 + 撤销/删除图标 */
+        /* 右侧：5个小圈 + 返回 + 打勾 + 删除 */
         .row-right {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             flex-shrink: 0;
         }
         .dots-group {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
         }
         .circle-dot {
-            width: 16px;
-            height: 16px;
+            width: 15px;
+            height: 15px;
             padding: 0;
             border-radius: 50%;
             background-color: #ffffff;
             border: 2px solid #cbd5e1;
             transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
         }
-        .circle-dot:hover { transform: scale(1.12); }
+        .circle-dot:hover { transform: scale(1.14); }
         .circle-dot.green {
             background-color: #16a34a;
             border-color: #16a34a;
@@ -156,11 +179,11 @@
         .btn-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
         .icon-btn {
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: inline-flex;
             align-items: center;
@@ -171,16 +194,23 @@
         .icon-btn:active { transform: scale(0.95); }
 
         .undo-btn {
-            background-color: #fbbf24;
-            color: #111827;
-        }
-        .undo-btn.is-pending {
             background-color: #e5e7eb;
-            color: #4b5563;
+            color: #374151;
+        }
+        .check-btn {
+            background-color: #16a34a;
+            color: #fff;
         }
         .del-btn {
             background-color: #ef4444;
             color: #fff;
+        }
+
+        .empty-tip {
+            color: #9ca3af;
+            font-size: 14px;
+            text-align: center;
+            padding: 20px 0;
         }
 
         .rank-item {
@@ -235,28 +265,33 @@
 
     <!-- 左上角账号栏 -->
     <div class="top-bar">
-        <span>账号：</span>
-        <span class="user-badge" id="currentUsernameDisplay">未登录</span>
-        <button class="auth-open-btn" onclick="openAuthModal('login')">登录 / 注册</button>
-        <button class="logout-btn" id="logoutBtn" onclick="logoutUser()" style="display:none;">退出</button>
+        <span>Account:</span>
+        <span class="user-badge" id="currentUsernameDisplay">Not logged in</span>
+        <button class="auth-open-btn" onclick="openAuthModal('login')">Login / Register</button>
+        <button class="logout-btn" id="logoutBtn" onclick="logoutUser()" style="display:none;">Logout</button>
     </div>
 
     <div class="main-layout">
-        <!-- 左侧：任务清单 -->
+        <!-- 左侧：任务清单 / 已完成 切换面板 -->
         <div class="container">
-            <h2>📝 云端待办清单</h2>
-            <div class="input-group">
-                <input type="text" id="taskInput" placeholder="输入一个任务...">
-                <button class="add-btn" onclick="addTask()">添加任务</button>
+            <div class="header-tabs">
+                <button type="button" class="mode-tab active" id="tabTodoList" onclick="switchListTab('todo')">📝 Todo List</button>
+                <button type="button" class="mode-tab" id="tabCompletedList" onclick="switchListTab('completed')">✅ Completed</button>
             </div>
+
+            <div class="input-group" id="addTaskGroup">
+                <input type="text" id="taskInput" placeholder="Enter a task...">
+                <button class="add-btn" onclick="addTask()">Add task</button>
+            </div>
+
             <ul id="taskList"></ul>
         </div>
 
         <!-- 右侧：全局积分排行榜 -->
         <div class="leaderboard-container">
-            <h2>🏆 全局积分排行榜</h2>
+            <h2>🏆 Global Leaderboard</h2>
             <div id="leaderboardList">
-                <p style="color: #888; font-size: 14px;">正在加载排行榜...</p>
+                <p style="color: #888; font-size: 14px;">Loading leaderboard...</p>
             </div>
         </div>
     </div>
@@ -265,21 +300,21 @@
     <div class="modal-backdrop" id="authModal">
         <div class="modal-card">
             <div class="tab-row">
-                <button class="tab-btn active" id="tabLogin" onclick="switchAuthTab('login')">登录</button>
-                <button class="tab-btn" id="tabRegister" onclick="switchAuthTab('register')">注册</button>
+                <button class="tab-btn active" id="tabLogin" onclick="switchAuthTab('login')">Login</button>
+                <button class="tab-btn" id="tabRegister" onclick="switchAuthTab('register')">Register</button>
             </div>
             <div class="field">
-                <label for="authUsername">用户名</label>
-                <input type="text" id="authUsername" placeholder="输入用户名">
+                <label for="authUsername">Username</label>
+                <input type="text" id="authUsername" placeholder="Enter username">
             </div>
             <div class="field">
-                <label for="authPassword">密码</label>
-                <input type="password" id="authPassword" placeholder="输入密码">
+                <label for="authPassword">Password</label>
+                <input type="password" id="authPassword" placeholder="Enter password">
             </div>
             <div class="auth-msg" id="authMsg"></div>
             <div class="modal-actions">
-                <button class="cancel-btn" onclick="closeAuthModal()">取消</button>
-                <button class="submit-auth-btn" id="submitAuthBtn" onclick="submitAuth()">登录</button>
+                <button class="cancel-btn" onclick="closeAuthModal()">Cancel</button>
+                <button class="submit-auth-btn" id="submitAuthBtn" onclick="submitAuth()">Login</button>
             </div>
         </div>
     </div>
@@ -287,21 +322,37 @@
     <script>
         const API_BASE = `${window.location.origin}/api`;
         let authMode = 'login';
+        let currentListTab = 'todo'; // 'todo' | 'completed'
         let currentUser = localStorage.getItem('todo_logged_user') || '';
+        let cachedTasks = [];
 
         const UNDO_ICON_SVG = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="9 14 4 9 9 4"></polyline>
                 <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
             </svg>
         `;
 
+        const CHECK_ICON_SVG = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        `;
+
         const DELETE_ICON_SVG = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
             </svg>
         `;
+
+        function switchListTab(tab) {
+            currentListTab = tab;
+            document.getElementById('tabTodoList').classList.toggle('active', tab === 'todo');
+            document.getElementById('tabCompletedList').classList.toggle('active', tab === 'completed');
+            document.getElementById('addTaskGroup').style.display = tab === 'todo' ? 'flex' : 'none';
+            renderTasks();
+        }
 
         function renderUserState() {
             const display = document.getElementById('currentUsernameDisplay');
@@ -310,7 +361,7 @@
                 display.innerText = currentUser;
                 logoutBtn.style.display = 'inline-block';
             } else {
-                display.innerText = '游客 (TestUser)';
+                display.innerText = 'TestUser';
                 logoutBtn.style.display = 'none';
             }
         }
@@ -334,7 +385,7 @@
             authMode = mode;
             document.getElementById('tabLogin').classList.toggle('active', mode === 'login');
             document.getElementById('tabRegister').classList.toggle('active', mode === 'register');
-            document.getElementById('submitAuthBtn').innerText = mode === 'login' ? '登录' : '注册并登录';
+            document.getElementById('submitAuthBtn').innerText = mode === 'login' ? 'Login' : 'Register and Login';
             document.getElementById('authMsg').innerText = '';
         }
 
@@ -344,7 +395,7 @@
             const msgEl = document.getElementById('authMsg');
 
             if (!username || !password) {
-                msgEl.innerText = '请填写用户名和密码';
+                msgEl.innerText = 'Please enter a username and password';
                 return;
             }
 
@@ -358,7 +409,7 @@
                 const data = await res.json();
 
                 if (!data.success) {
-                    msgEl.innerText = data.message || '操作失败';
+                    msgEl.innerText = data.message || 'Operation failed';
                     return;
                 }
 
@@ -368,7 +419,7 @@
                 closeAuthModal();
                 refreshAll();
             } catch (err) {
-                msgEl.innerText = '网络请求失败，请检查后端服务';
+                msgEl.innerText = 'Network request failed, please check the backend service';
             }
         }
 
@@ -379,73 +430,102 @@
             refreshAll();
         }
 
-        async function loadTasks() {
-            try {
-                const response = await fetch(`${API_BASE}/tasks?username=${encodeURIComponent(activeUsername())}`);
-                const tasks = await response.json();
+        function renderTasks() {
+            const ul = document.getElementById('taskList');
+            ul.innerHTML = '';
 
-                const ul = document.getElementById('taskList');
-                ul.innerHTML = '';
+            const filtered = (cachedTasks || []).filter(task =>
+                currentListTab === 'completed'
+                    ? task.status === 'COMPLETED'
+                    : task.status !== 'COMPLETED'
+            );
 
-                (tasks || []).forEach(task => {
-                    const li = document.createElement('li');
-                    const isCompleted = task.status === 'COMPLETED';
-                    const taskDots = (Number(task.dots) || 0) % 5;
+            if (filtered.length === 0) {
+                const tip = document.createElement('div');
+                tip.className = 'empty-tip';
+                tip.innerText = currentListTab === 'completed' ? 'No completed tasks yet' : 'No pending tasks';
+                ul.appendChild(tip);
+                return;
+            }
 
-                    const span = document.createElement('span');
-                    span.className = `task-text ${isCompleted ? 'completed' : ''}`;
-                    span.innerText = task.taskName;
-                    li.appendChild(span);
+            filtered.forEach(task => {
+                const li = document.createElement('li');
+                const isCompleted = task.status === 'COMPLETED';
+                const taskDots = (Number(task.dots) || 0) % 5;
 
-                    const rowRight = document.createElement('div');
-                    rowRight.className = 'row-right';
+                const span = document.createElement('span');
+                span.className = `task-text ${isCompleted ? 'completed-text' : ''}`;
+                span.innerText = task.taskName;
+                li.appendChild(span);
 
-                    // 当前任务各自独立的 5 颗小圈
+                const rowRight = document.createElement('div');
+                rowRight.className = 'row-right';
+
+                // 未完成任务旁边显示 5 个小圈
+                if (!isCompleted) {
                     const dotsGroup = document.createElement('div');
                     dotsGroup.className = 'dots-group';
                     for (let i = 0; i < 5; i++) {
                         const dot = document.createElement('button');
                         dot.type = 'button';
                         dot.className = `circle-dot ${i < taskDots ? 'green' : ''}`;
-                        dot.title = '点一下变绿并加分，满5次变回白色';
+                        dot.title = 'Click to turn green and gain points; reset to white after 5 clicks';
                         dot.onclick = () => clickTaskCircle(task.id);
                         dotsGroup.appendChild(dot);
                     }
                     rowRight.appendChild(dotsGroup);
+                }
 
-                    // 右侧图标按钮：撤销/完成 + 删除
-                    const btnGroup = document.createElement('div');
-                    btnGroup.className = 'btn-group';
+                // 右侧操作按钮：返回 + 打勾（仅未完成栏显示） + 删除
+                const btnGroup = document.createElement('div');
+                btnGroup.className = 'btn-group';
 
-                    const toggleBtn = document.createElement('button');
-                    toggleBtn.type = 'button';
-                    toggleBtn.className = `icon-btn undo-btn ${isCompleted ? '' : 'is-pending'}`;
-                    toggleBtn.title = isCompleted ? '撤销' : '完成';
-                    toggleBtn.innerHTML = UNDO_ICON_SVG;
-                    toggleBtn.onclick = () => toggleTaskStatus(task.id, task.status);
-                    btnGroup.appendChild(toggleBtn);
+                const undoBtn = document.createElement('button');
+                undoBtn.type = 'button';
+                undoBtn.className = 'icon-btn undo-btn';
+                undoBtn.title = isCompleted ? 'Return to task list' : 'Undo/Reset';
+                undoBtn.innerHTML = UNDO_ICON_SVG;
+                undoBtn.onclick = () => undoTask(task.id, task.status);
+                btnGroup.appendChild(undoBtn);
 
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.type = 'button';
-                    deleteBtn.className = 'icon-btn del-btn';
-                    deleteBtn.title = '删除';
-                    deleteBtn.innerHTML = DELETE_ICON_SVG;
-                    deleteBtn.onclick = () => deleteTask(task.id);
-                    btnGroup.appendChild(deleteBtn);
+                if (!isCompleted) {
+                    const checkBtn = document.createElement('button');
+                    checkBtn.type = 'button';
+                    checkBtn.className = 'icon-btn check-btn';
+                    checkBtn.title = 'Complete and move to completed';
+                    checkBtn.innerHTML = CHECK_ICON_SVG;
+                    checkBtn.onclick = () => completeTask(task.id);
+                    btnGroup.appendChild(checkBtn);
+                }
 
-                    rowRight.appendChild(btnGroup);
-                    li.appendChild(rowRight);
-                    ul.appendChild(li);
-                });
+                const deleteBtn = document.createElement('button');
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'icon-btn del-btn';
+                deleteBtn.title = 'Delete';
+                deleteBtn.innerHTML = DELETE_ICON_SVG;
+                deleteBtn.onclick = () => deleteTask(task.id);
+                btnGroup.appendChild(deleteBtn);
+
+                rowRight.appendChild(btnGroup);
+                li.appendChild(rowRight);
+                ul.appendChild(li);
+            });
+        }
+
+        async function loadTasks() {
+            try {
+                const response = await fetch(`${API_BASE}/tasks?username=${encodeURIComponent(activeUsername())}`);
+                cachedTasks = await response.json();
+                renderTasks();
             } catch (e) {
-                console.error('无法加载云端任务', e);
+                console.error('Failed to load cloud tasks', e);
             }
         }
 
         async function addTask() {
             const input = document.getElementById('taskInput');
             const taskName = input.value.trim();
-            if (!taskName) return alert('请输入任务内容！');
+            if (!taskName) return alert('Please enter the task content!');
 
             await fetch(`${API_BASE}/tasks`, {
                 method: 'POST',
@@ -457,7 +537,7 @@
             loadTasks();
         }
 
-        // 点击某条任务旁边的小圈：只影响该任务自己的5个圈，每次都正常加分
+        // 点击小圈：推进当前任务小圈并加分，不把任务划掉
         async function clickTaskCircle(id) {
             await fetch(`${API_BASE}/tasks/${id}`, {
                 method: 'PUT',
@@ -472,16 +552,32 @@
             loadLeaderboard();
         }
 
-        async function toggleTaskStatus(id, currentStatus) {
-            const newStatus = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
+        // 点击打勾图标：完成任务、加分，并移入“已完成”格子
+        async function completeTask(id) {
+            await fetch(`${API_BASE}/tasks/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: activeUsername(),
+                    action: 'COMPLETE',
+                    status: 'COMPLETED'
+                })
+            });
 
+            loadTasks();
+            loadLeaderboard();
+        }
+
+        // 点击返回图标：若是已完成则退回“任务清单”
+        async function undoTask(id, currentStatus) {
+            const nextStatus = currentStatus === 'COMPLETED' ? 'PENDING' : 'PENDING';
             await fetch(`${API_BASE}/tasks/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     username: activeUsername(),
                     action: 'TOGGLE',
-                    status: newStatus
+                    status: nextStatus
                 })
             });
 
@@ -505,7 +601,7 @@
                 container.innerHTML = '';
 
                 if (!leaderboard || leaderboard.length === 0) {
-                    container.innerHTML = '<p style="color: #888; font-size: 14px;">暂无排行数据</p>';
+                    container.innerHTML = '<p style="color: #888; font-size: 14px;">No ranking data available</p>';
                     return;
                 }
 
@@ -520,7 +616,7 @@
                     container.appendChild(div);
                 });
             } catch (e) {
-                console.error('获取排行榜失败', e);
+                console.error('Failed to retrieve the leaderboard', e);
             }
         }
 

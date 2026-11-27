@@ -31,7 +31,7 @@ public class TodoController {
             try {
                 File file = new File("src/main/resources/serviceAccountKey.json");
                 if (!file.exists()) {
-                    throw new IllegalStateException("找不到 Firebase 密钥文件: " + file.getAbsolutePath());
+                    throw new IllegalStateException("Firebase key file not found: " + file.getAbsolutePath());
                 }
 
                 FileInputStream serviceAccount = new FileInputStream(file);
@@ -40,9 +40,9 @@ public class TodoController {
                         .build();
 
                 FirebaseApp.initializeApp(options);
-                System.out.println("Firebase 默认实例初始化完成");
+                System.out.println("Default Firebase instance initialization complete");
             } catch (Exception e) {
-                throw new IllegalStateException("Firebase 初始化失败", e);
+                throw new IllegalStateException("Firebase initialization failed", e);
             }
         }
     }
@@ -86,8 +86,7 @@ public class TodoController {
         return res;
     }
 
-    // 切换任务状态（完成加分 + 5圈连击计数；撤销扣分）
-    // 切换任务状态 或 点击任务旁边的 5 个小圈之一
+    // 切换任务状态、标记完成 或 点击任务旁边的 5 个小圈之一
     @PutMapping("/tasks/{id}")
     public Map<String, Object> updateTaskStatus(@PathVariable String id, @RequestBody Map<String, Object> request) {
         String username = request.get("username") != null ? request.get("username").toString().trim() : "TestUser";
@@ -123,18 +122,21 @@ public class TodoController {
                             ? ((Number) task.get("dots")).intValue() : 0;
 
                     if ("CIRCLE".equals(action)) {
-                        // 点小圈：当前任务小圈 +1，每满5次变回全白(0)，并加10分
+                        // 只推进当前任务自己的5个小圈（满5归0变回全白）并加10分，不划掉任务
                         currentDots = (currentDots + 1) % 5;
                         task.put("dots", currentDots);
-                        task.put("status", "COMPLETED");
                         points += 10;
+                    } else if ("COMPLETE".equals(action)) {
+                        // 点击打勾图标：标记为已完成并加分（若原本未完成）
+                        task.put("status", "COMPLETED");
+                        if (!"COMPLETED".equals(oldStatus)) {
+                            points += 10;
+                        }
                     } else {
-                        // 点弯箭头：切换完成/撤销
+                        // 点击返回（撤销）图标：切换完成/未完成状态
                         task.put("status", newStatus);
                         if (!"COMPLETED".equals(oldStatus) && "COMPLETED".equals(newStatus)) {
                             points += 10;
-                            currentDots = (currentDots + 1) % 5;
-                            task.put("dots", currentDots);
                         } else if ("COMPLETED".equals(oldStatus) && !"COMPLETED".equals(newStatus)) {
                             points = Math.max(0, points - 10);
                         }
@@ -171,7 +173,7 @@ public class TodoController {
 
         if (taskName.isEmpty()) {
             response.put("success", false);
-            response.put("message", "任务内容不能为空");
+            response.put("message", "Task content cannot be empty");
             return response;
         }
 
@@ -317,7 +319,7 @@ public class TodoController {
 
         if (username.isEmpty() || password.isEmpty()) {
             response.put("success", false);
-            response.put("message", "用户名和密码不能为空");
+            response.put("message", "Username and password cannot be empty.");
             return response;
         }
 
@@ -329,7 +331,7 @@ public class TodoController {
 
             if (doc.exists()) {
                 response.put("success", false);
-                response.put("message", "该用户名已被注册，请换一个或直接登录");
+                response.put("message", "This username is already taken; please choose another one or log in directly.");
                 return response;
             }
 
@@ -343,11 +345,11 @@ public class TodoController {
 
             response.put("success", true);
             response.put("username", username);
-            response.put("message", "注册成功！已自动登录");
+            response.put("message", "Registration successful! You have been logged in automatically.");
         } catch (Exception e) {
             e.printStackTrace();
             response.put("success", false);
-            response.put("message", "注册异常: " + e.getMessage());
+            response.put("message", "Registration Error: " + e.getMessage());
         }
         return response;
     }
@@ -361,7 +363,7 @@ public class TodoController {
 
         if (username.isEmpty() || password.isEmpty()) {
             response.put("success", false);
-            response.put("message", "请输入用户名和密码");
+            response.put("message", "Please enter your username and password.");
             return response;
         }
 
@@ -373,24 +375,24 @@ public class TodoController {
 
             if (!doc.exists()) {
                 response.put("success", false);
-                response.put("message", "用户不存在，请先注册");
+                response.put("message", "User does not exist; please register first.");
                 return response;
             }
 
             String savedPassword = doc.getString("password");
             if (savedPassword == null || !savedPassword.equals(password)) {
                 response.put("success", false);
-                response.put("message", "密码错误");
+                response.put("message", "Incorrect password");
                 return response;
             }
 
             response.put("success", true);
             response.put("username", username);
-            response.put("message", "登录成功");
+            response.put("message", "Login successful");
         } catch (Exception e) {
             e.printStackTrace();
             response.put("success", false);
-            response.put("message", "登录异常: " + e.getMessage());
+            response.put("message", "Login issue: " + e.getMessage());
         }
         return response;
     }
