@@ -55,7 +55,7 @@ Put your Firebase service account JSON file in src/main/resources/serviceAccount
 
 Start the Spring Boot backend with Maven:
 ```text
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 Open http://localhost:8080 in your browser.
 
